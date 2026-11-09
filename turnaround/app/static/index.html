@@ -1,0 +1,680 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Turnaround to 3D</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<script src="static/vendor/three.min.js"></script>
+<script src="static/vendor/OrbitControls.js"></script>
+<script src="static/vendor/RoomEnvironment.js"></script>
+<script src="static/vendor/GLTFLoader.js"></script>
+<style>
+:root {
+  --bg: #eef1f4; --panel: #e2e7ec; --stage: #d6dce3; --fg: #1c2733; --muted: #566473;
+  --line: #bcc6d0; --accent: #2f5597; --on-accent: #ffffff; --warn: #9a5b12; --good: #2c7a4b;
+  --display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --body: "Source Sans 3", "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141a21; --panel: #1d252e; --stage: #27313c; --fg: #e6ebf0; --muted: #9dabb9;
+    --line: #36434f; --accent: #8fb0e6; --on-accent: #10161c; --warn: #e0a95e; --good: #74c796; color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 400 16px/1.5 var(--body); padding: 20px 16px 40px; }
+.wrap { max-width: 1180px; margin-inline: auto; display: grid; gap: 22px; }
+.wrap > * { min-width: 0; }
+header { display: flex; flex-wrap: wrap; gap: 10px 28px; align-items: end; border-bottom: 2px solid var(--fg); }
+h1, h2 { font-family: var(--display); font-weight: 600; margin: 0; text-wrap: balance; }
+h1 { font-size: 2.1rem; line-height: 1.1; padding-bottom: 8px; }
+h2 { font-size: 1.45rem; line-height: 1.2; }
+nav { display: flex; gap: 2px; }
+nav a {
+  font: 600 1.15rem/1 var(--display); letter-spacing: .02em; color: var(--muted); text-decoration: none; padding: 9px 16px;
+  border: 1px solid transparent; border-bottom: 0; border-radius: 4px 4px 0 0;
+}
+nav a[aria-current="page"] { background: var(--fg); color: var(--bg); }
+nav a:hover:not([aria-current="page"]) { color: var(--fg); }
+main { display: grid; gap: 24px; min-width: 0; }
+main > * { min-width: 0; }
+.note { margin: 0; max-width: 72ch; }
+.muted { color: var(--muted); }
+button, select, input[type="text"] {
+  font: 600 .92rem/1.2 var(--body); color: var(--fg); background: var(--panel);
+  border: 1px solid var(--line); border-radius: 4px; padding: 7px 11px;
+}
+button, select { cursor: pointer; }
+input[type="text"] { font-weight: 400; cursor: text; width: 100%; }
+button:hover:not(:disabled), select:hover { border-color: var(--accent); }
+button:disabled { opacity: .5; cursor: not-allowed; }
+:is(a, button, select, input, .drop):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button[aria-pressed="true"], button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+button.primary { font-size: 1.05rem; padding: 11px 26px; }
+.drop {
+  display: grid; place-items: center; text-align: center; gap: 6px; padding: 44px 20px; background: var(--panel);
+  border: 2px dashed var(--line); border-radius: 6px; cursor: pointer;
+}
+.drop:hover, .drop.over { border-color: var(--accent); }
+.drop strong { font: 600 1.6rem/1.2 var(--display); }
+.drop kbd { font: 500 .9em var(--mono); border: 1px solid var(--line); border-radius: 3px; padding: 1px 5px; background: var(--bg); }
+.drop img { max-height: 280px; max-width: 100%; display: block; }
+.message { margin: 0; padding: 10px 12px; border-left: 4px solid var(--accent); background: var(--panel); max-width: 80ch; }
+.message.error { border-color: var(--warn); color: var(--warn); }
+.figures { display: flex; flex-wrap: wrap; gap: 14px; align-items: end; }
+.figure { display: grid; gap: 6px; justify-items: center; width: 170px; }
+.figure img { height: 240px; max-width: 100%; object-fit: contain; display: block; }
+.figure.skip img { opacity: .3; }
+.figure select { width: 100%; }
+.styles { border: 0; margin: 0; padding: 0; display: grid; gap: 6px; max-width: 80ch; }
+.styles legend { padding: 0; margin-bottom: 4px; }
+.styles label { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.go { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+.go label { display: grid; gap: 4px; flex: 1 1 240px; max-width: 360px; }
+.k, .label { font: 500 .72rem/1.3 var(--mono); color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+.runs { list-style: none; margin: 0; padding: 0; display: grid; }
+.runs li { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; border-top: 1px solid var(--line); padding: 9px 0; }
+.runs .name { font: 500 .95rem/1.3 var(--mono); overflow-wrap: anywhere; min-width: 0; }
+.chip { font: 500 .72rem/1 var(--mono); padding: 4px 7px; border-radius: 3px; border: 1px solid currentColor; white-space: nowrap; }
+.chip.done { color: var(--good); } .chip.failed { color: var(--warn); } .chip.running, .chip.queued { color: var(--accent); }
+.runs .detail { flex: 1 1 100%; min-width: 0; font-size: .92rem; overflow-wrap: anywhere; }
+.controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+.group { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.group > .label { margin-right: 4px; }
+.viewer { display: grid; gap: 12px; min-width: 0; }
+.stage { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; }
+.stage.compare { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.pane { position: relative; background: var(--stage); height: min(72vh, 700px); min-height: 380px; min-width: 0; overflow: hidden; }
+.host { position: absolute; inset: 0; }
+.host canvas { display: block; }
+.caption { position: absolute; left: 10px; top: 10px; font: 500 .75rem/1.3 var(--mono); background: var(--panel); border: 1px solid var(--line); padding: 3px 7px; pointer-events: none; }
+.status { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; color: var(--muted); pointer-events: none; }
+.status.error { color: var(--warn); }
+.readout { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px 20px; }
+.readout > div { min-width: 0; }
+.v { font: 500 1rem/1.4 var(--mono); font-variant-numeric: tabular-nums; }
+.path { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-width: 0; }
+code { font: 400 .85rem/1.4 var(--mono); overflow-wrap: anywhere; user-select: all; min-width: 0; }
+.sheet { display: grid; gap: 12px; }
+.views { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 10px; border-bottom: 2px solid var(--fg); }
+.view { appearance: none; background: none; border: 0; padding: 0 0 8px; text-align: center; min-width: 0; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 6px; font-weight: 400; }
+.view img { display: block; height: clamp(150px, 28vw, 300px); max-width: 100%; object-fit: contain; }
+.view:hover img { filter: drop-shadow(0 0 5px var(--accent)); }
+.view span { font: 500 .75rem/1.35 var(--mono); color: var(--muted); }
+.view b { color: var(--fg); font-weight: 500; display: block; }
+.sheet-src { max-width: 100%; display: block; border: 1px solid var(--line); }
+table { border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 6px 18px 6px 0; border-top: 1px solid var(--line); vertical-align: top; }
+th { font-weight: 600; }
+@media (max-width: 720px) {
+  .stage.compare { grid-template-columns: minmax(0, 1fr); }
+  .stage.compare .pane { height: 48vh; min-height: 300px; }
+  .pane { height: 62vh; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Turnaround to 3D</h1>
+    <nav aria-label="Pages">
+      <a href="#generate" id="tabGenerate">Generate model</a>
+      <a href="#results" id="tabResults">Results</a>
+    </nav>
+  </header>
+
+  <main id="generate">
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose a turnaround image">
+      <strong>Paste a turnaround sheet</strong>
+      <span class="muted">Press <kbd>Ctrl</kbd>+<kbd>V</kbd>, drop an image here, or click to choose a file. Leave a clear gap between the views.</span>
+      <img id="preview" alt="The image you added" hidden>
+    </div>
+    <input type="file" id="file" accept="image/*" hidden>
+    <p class="message" id="message" role="status" hidden></p>
+
+    <section id="review" class="viewer" hidden>
+      <h2>Detected views</h2>
+      <p class="note">Check each label. <b>Front</b> and <b>Back</b> are as they sound. <b>Left</b> means the character faces image-left, and <b>Right</b> means image-right.</p>
+      <div class="figures" id="figures"></div>
+      <fieldset class="styles" id="styles">
+        <legend class="k">Texture styles</legend>
+        <label><input type="checkbox" value="hybrid" checked> <b>Hybrid</b> <span class="muted">Painted by the AI, with your drawing's pixels where the surface faces the camera. Best all-round.</span></label>
+        <label><input type="checkbox" value="inferred"> <b>Inferred</b> <span class="muted">Painted by the AI only. Cleanest, but loses small details.</span></label>
+        <label><input type="checkbox" value="projection"> <b>Projection</b> <span class="muted">Your drawing's pixels wrapped as far as they reach. Sharpest from the front, smears from the side.</span></label>
+      </fieldset>
+      <div class="go">
+        <label><span class="k">Name (optional)</span><input type="text" id="name" maxlength="48" placeholder="hoodie-boy" autocomplete="off"></label>
+        <button type="button" class="primary" id="go">Generate</button>
+      </div>
+      <p class="note muted">Takes about 2 minutes for the shape plus 3 minutes per style. You can leave this page while it runs.</p>
+    </section>
+
+    <section class="viewer">
+      <h2>Runs</h2>
+      <ul class="runs" id="runs"></ul>
+    </section>
+  </main>
+
+  <main id="results" hidden>
+    <div class="controls">
+      <div class="group">
+        <label class="label" for="runSelect">Result</label>
+        <select id="runSelect"></select>
+      </div>
+    </div>
+    <p class="message error" id="runError" hidden></p>
+    <p class="message" id="runEmpty" hidden></p>
+
+    <section class="viewer" id="viewer" aria-label="3D viewer" hidden>
+      <div class="controls">
+        <div class="group" id="versions" role="group" aria-label="Model version"><span class="label">Model</span></div>
+        <div class="group">
+          <label class="label" for="compare">Compare with</label>
+          <select id="compare"></select>
+        </div>
+      </div>
+      <div class="controls">
+        <div class="group" role="group" aria-label="Camera angle">
+          <span class="label">Angle</span>
+          <button type="button" data-theta="0">Front</button>
+          <button type="button" data-theta="90">Left</button>
+          <button type="button" data-theta="180">Back</button>
+          <button type="button" data-theta="270">Right</button>
+          <button type="button" data-theta="35" data-phi="75">3/4</button>
+        </div>
+        <div class="group" role="group" aria-label="Close-ups">
+          <span class="label">Close-up</span>
+          <button type="button" data-focus="face">Face</button>
+          <button type="button" data-focus="hands">Hands</button>
+          <button type="button" data-focus="reset">Whole figure</button>
+        </div>
+        <div class="group"><button type="button" id="spin" aria-pressed="false">Auto-rotate</button></div>
+      </div>
+      <div class="stage" id="stage">
+        <div class="pane">
+          <div class="host" id="hostA" role="img" aria-label="The selected 3D model. Drag to orbit, scroll to zoom."></div>
+          <div class="caption" id="capA"></div>
+          <div class="status" id="statusA"></div>
+        </div>
+        <div class="pane" id="paneB" hidden>
+          <div class="host" id="hostB" role="img" aria-label="The 3D model being compared. Drag to orbit, scroll to zoom."></div>
+          <div class="caption" id="capB"></div>
+          <div class="status" id="statusB" hidden></div>
+        </div>
+      </div>
+      <div class="readout">
+        <div><div class="k">Triangles</div><div class="v" id="faces">–</div></div>
+        <div><div class="k">Texture</div><div class="v" id="texture">–</div></div>
+        <div><div class="k">File size</div><div class="v" id="size">–</div></div>
+      </div>
+      <div class="path"><code id="path"></code><button type="button" id="copy">Copy path</button></div>
+    </section>
+
+    <section class="sheet" id="source" hidden>
+      <h2>What went in</h2>
+      <p class="note">Select a view to turn the model to that angle. The score shows how closely each view's outline matches the mesh, where 1.000 would be a perfect overlap.</p>
+      <div class="views" id="views"></div>
+      <img class="sheet-src" id="sheet" alt="The original turnaround sheet" loading="lazy" hidden>
+    </section>
+
+    <section class="viewer" id="details" hidden>
+      <h2>Run details</h2>
+      <div style="overflow-x:auto"><table id="detailTable"></table></div>
+    </section>
+  </main>
+</div>
+
+<script>
+const LABEL_NAMES = { front: "Front", left: "Left", back: "Back", right: "Right", skip: "Skip" };
+const STYLE_NAMES = { hybrid: "Hybrid", inferred: "Inferred", projection: "Projection" };
+const STAGE_NAMES = { shape: "Building the 3D shape, about 2 minutes", paint: "Painting the texture, about 3 minutes",
+  ...Object.fromEntries(Object.entries(STYLE_NAMES).map(([style, name]) => [`paint_${style}`, `Painting the ${name.toLowerCase()} texture, about 3 minutes`])) };
+const FOCUS = { hands: { theta: 0, y: .66, x: -.40, zoom: .28 }, face: { theta: 25, y: .15, x: 0, zoom: .26 } };  // y: 0 top of the figure, 1 the soles
+const DEFAULT_PHI = 82, FOV = 30;
+const $ = id => document.getElementById(id);
+const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const rad = THREE.MathUtils.degToRad;
+const degrees = THREE.MathUtils.radToDeg;
+
+function el(tag, props = {}, ...children) {
+  const node = Object.assign(document.createElement(tag), props);
+  node.append(...children);
+  return node;
+}
+function formatBytes(bytes) { return (bytes / 1e6).toFixed(1) + " MB"; }
+async function api(url, options) {
+  const response = await fetch(url, options);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || `The server answered with status ${response.status}.`);
+  return data;
+}
+
+/* ---------- tabs ---------- */
+function route() {
+  const results = location.hash === "#results";
+  $("generate").hidden = results;
+  $("results").hidden = !results;
+  $("tabGenerate").toggleAttribute("aria-current", false);
+  $("tabResults").toggleAttribute("aria-current", false);
+  (results ? $("tabResults") : $("tabGenerate")).setAttribute("aria-current", "page");
+  if (results) showSelectedRun();
+}
+window.addEventListener("hashchange", route);
+
+/* ---------- generate tab ---------- */
+let upload = null;
+
+function setMessage(text, isError) {
+  const message = $("message");
+  message.hidden = !text;
+  message.textContent = text || "";
+  message.classList.toggle("error", Boolean(isError));
+}
+
+async function addImage(file) {
+  if (!file || !file.type.startsWith("image/")) return setMessage("That isn't an image. Paste or choose a picture of the sheet.", true);
+  upload = null;
+  $("review").hidden = true;
+  const preview = $("preview");
+  if (preview.src) URL.revokeObjectURL(preview.src);
+  preview.src = URL.createObjectURL(file);
+  preview.hidden = false;
+  setMessage("Finding the views. This takes about a minute.");
+  try {
+    upload = await api("api/analyze", { method: "POST", body: file });
+    setMessage("");
+    renderFigures();
+  } catch (error) {
+    setMessage(error.message, true);
+  }
+}
+
+function renderFigures() {
+  $("figures").replaceChildren(...upload.figures.map(figure => {
+    const select = el("select", { "ariaLabel": "View label" });
+    for (const [value, text] of Object.entries(LABEL_NAMES)) select.append(el("option", { value, textContent: text }));
+    select.value = figure.label;
+    const card = el("div", { className: "figure" }, el("img", { src: figure.url, alt: "A figure cut from the sheet" }), select);
+    card.classList.toggle("skip", figure.label === "skip");
+    select.addEventListener("change", () => {
+      figure.label = select.value;
+      card.classList.toggle("skip", figure.label === "skip");
+      validate();
+    });
+    return card;
+  }));
+  $("review").hidden = false;
+  validate();
+}
+
+function problem() {
+  const used = upload.figures.map(f => f.label).filter(label => label !== "skip");
+  if (new Set(used).size !== used.length) return "Each view can be used only once. Set the extra one to Skip.";
+  if (!used.includes("front")) return "Mark one figure as Front. The texture needs it.";
+  if (used.length < 2) return "Mark at least two views.";
+  if (!chosenStyles().length) return "Choose at least one texture style.";
+  return "";
+}
+
+const chosenStyles = () => [...$("styles").querySelectorAll("input:checked")].map(input => input.value);
+$("styles").addEventListener("change", () => { if (upload) validate(); });
+
+function validate() {
+  const issue = problem();
+  $("go").disabled = Boolean(issue);
+  setMessage(issue, Boolean(issue));
+}
+
+$("go").addEventListener("click", async () => {
+  $("go").disabled = true;
+  try {
+    const labels = Object.fromEntries(upload.figures.map(f => [f.file, f.label]));
+    const { run } = await api("api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: upload.id, labels, name: $("name").value, styles: chosenStyles() }) });
+    upload = null;
+    $("review").hidden = true;
+    $("preview").hidden = true;
+    $("name").value = "";
+    setMessage(`Started ${run}. Its progress is listed under Runs.`);
+    refreshRuns();
+  } catch (error) {
+    setMessage(error.message, true);
+    $("go").disabled = false;
+  }
+});
+
+document.addEventListener("paste", e => {
+  if (location.hash === "#results" || e.target.matches?.("input")) return;
+  const item = [...e.clipboardData.items].find(entry => entry.type.startsWith("image/"));
+  if (item) { e.preventDefault(); addImage(item.getAsFile()); }
+  else setMessage("The clipboard has no image in it. Copy the image itself, not its link.", true);
+});
+$("drop").addEventListener("click", () => $("file").click());
+$("drop").addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("file").click(); } });
+$("file").addEventListener("change", e => { addImage(e.target.files[0]); e.target.value = ""; });
+$("drop").addEventListener("dragover", e => { e.preventDefault(); $("drop").classList.add("over"); });
+$("drop").addEventListener("dragleave", () => $("drop").classList.remove("over"));
+$("drop").addEventListener("drop", e => { e.preventDefault(); $("drop").classList.remove("over"); addImage(e.dataTransfer.files[0]); });
+
+/* ---------- run list, shared by both tabs ---------- */
+let runs = [], runsSignature = "";
+
+function runRow(run) {
+  const row = el("li", {}, el("span", { className: "name", textContent: run.name }), el("span", { className: `chip ${run.status}`, textContent: run.status }));
+  if (run.versions.length && run.status !== "queued") {
+    const open = el("button", { type: "button", textContent: "View" });
+    open.addEventListener("click", () => { $("runSelect").value = run.name; selected = run.name; location.hash = "#results"; });
+    row.append(open);
+  }
+  const detail = run.status === "running" ? STAGE_NAMES[run.stage] : run.status === "queued" ? "Waiting for the GPU." : run.status === "failed" ? run.error : "";
+  if (detail) row.append(el("span", { className: "detail muted", textContent: detail }));
+  return row;
+}
+
+let selected = null;
+
+async function refreshRuns() {
+  let data;
+  try { data = await api("api/runs"); } catch { return; }
+  const signature = JSON.stringify(data.runs);
+  if (signature === runsSignature) return;
+  runsSignature = signature;
+  runs = data.runs;
+  $("runs").replaceChildren(...(runs.length ? runs.map(runRow) : [el("li", { className: "muted", textContent: "Nothing generated yet. Paste a sheet to start." })]));
+  const select = $("runSelect");
+  const previous = selected;
+  select.replaceChildren(...runs.map(run => el("option", { value: run.name, textContent: `${run.name}${run.status === "done" ? "" : ` (${run.status})`}` })));
+  const fallback = runs.find(run => run.status === "done") || runs[0];
+  selected = runs.some(run => run.name === previous) ? previous : fallback?.name ?? null;
+  if (selected) select.value = selected;
+  if (location.hash === "#results") showSelectedRun();
+}
+setInterval(() => { if (!document.hidden) refreshRuns(); }, 3000);
+
+/* ---------- 3D viewer ---------- */
+const modelCache = new Map();
+const gltfLoader = new THREE.GLTFLoader();
+
+function loadModel(url) {
+  if (modelCache.has(url)) return modelCache.get(url);
+  const promise = gltfLoader.loadAsync(url).then(gltf => {
+    let mesh = null;
+    gltf.scene.traverse(node => { if (node.isMesh && !mesh) mesh = node; });
+    if (!mesh) throw new Error("no mesh");
+    const { geometry } = mesh;
+    let { material } = mesh;
+    if (!geometry.attributes.normal) geometry.computeVertexNormals();
+    if (material.map) {
+      material.envMapIntensity = .8;
+      material.flatShading = false;
+      material.needsUpdate = true;
+    } else {
+      material = new THREE.MeshStandardMaterial({ color: 0xc4cad1, roughness: .72, metalness: 0 });
+    }
+    geometry.computeBoundingBox();
+    return { geometry, material };
+  });
+  promise.catch(() => modelCache.delete(url));
+  modelCache.set(url, promise);
+  return promise;
+}
+
+function shadowTexture() {
+  const canvas = el("canvas", { width: 256, height: 256 });
+  const context = canvas.getContext("2d");
+  const gradient = context.createRadialGradient(128, 128, 8, 128, 128, 128);
+  gradient.addColorStop(0, "rgba(10,20,30,.42)");
+  gradient.addColorStop(1, "rgba(10,20,30,0)");
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, 256, 256);
+  return new THREE.CanvasTexture(canvas);
+}
+
+class Pane {
+  constructor(host, status, caption) {
+    Object.assign(this, { host, status, caption, token: 0, frame: null, activeUntil: 0, animation: null, mesh: null, model: null });
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    this.renderer.outputEncoding = THREE.sRGBEncoding;
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    host.append(this.renderer.domElement);
+    this.scene = new THREE.Scene();
+    this.scene.environment = new THREE.PMREMGenerator(this.renderer).fromScene(new THREE.RoomEnvironment(), .04).texture;
+    this.camera = new THREE.PerspectiveCamera(FOV, 1, .01, 100);
+    this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+    this.controls.enableDamping = true;
+    this.controls.autoRotateSpeed = 2.5;
+    this.controls.addEventListener("start", () => { this.activeUntil = Infinity; this.animation = null; });
+    this.controls.addEventListener("end", () => { this.activeUntil = performance.now() + 800; });
+    this.controls.addEventListener("change", () => this.onChange && this.onChange());
+    this.shadow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: shadowTexture(), transparent: true, depthWrite: false }));
+    this.shadow.rotation.x = -Math.PI / 2;
+    this.scene.add(this.shadow);
+    new ResizeObserver(() => this.resize()).observe(host);
+    this.resize();
+    this.renderer.setAnimationLoop(() => this.tick());
+  }
+  resize() {
+    const { clientWidth: width, clientHeight: height } = this.host;
+    if (!width || !height) return;
+    this.renderer.setSize(width, height);
+    this.camera.aspect = width / height;
+    this.camera.updateProjectionMatrix();
+  }
+  tick() {
+    if (!this.host.clientWidth) return;
+    if (this.animation) this.animate();
+    this.controls.update();
+    this.renderer.render(this.scene, this.camera);
+  }
+  async show(version) {
+    const token = ++this.token;
+    this.status.hidden = false;
+    this.status.classList.remove("error");
+    this.status.textContent = "Loading model…";
+    this.caption.textContent = version.label;
+    try {
+      const model = await loadModel(version.url);
+      if (token !== this.token) return null;
+      if (this.mesh) this.scene.remove(this.mesh);
+      this.mesh = new THREE.Mesh(model.geometry, model.material);
+      this.model = model;
+      this.scene.add(this.mesh);
+      const first = !this.frame;
+      this.fit(model.geometry.boundingBox);
+      if (first) this.onFirstFrame();
+      this.status.hidden = true;
+      return model;
+    } catch {
+      if (token !== this.token) return null;
+      this.status.classList.add("error");
+      this.status.textContent = "This model could not be loaded. Reload the page to try again.";
+      return null;
+    }
+  }
+  fit(box) {
+    const center = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3());
+    const distance = size.y * 1.16 / (2 * Math.tan(rad(FOV) / 2));
+    this.frame = { center, size, distance };
+    this.controls.minDistance = distance * .1;
+    this.controls.maxDistance = distance * 3;
+    const span = Math.max(size.x, size.z) * 1.25;
+    this.shadow.scale.set(span, span, 1);
+    this.shadow.position.set(center.x, box.min.y, center.z);
+  }
+  place(theta, phi, radius, target) {
+    this.controls.target.copy(target);
+    this.camera.position.setFromSpherical(new THREE.Spherical(radius, rad(phi), rad(theta))).add(target);
+    this.controls.update();
+  }
+  moveTo(theta, phi, radius, target) {
+    if (calm) return this.place(theta, phi, radius, target);
+    const from = new THREE.Spherical().setFromVector3(this.camera.position.clone().sub(this.controls.target));
+    const startTheta = degrees(from.theta);
+    const turn = ((theta - startTheta) % 360 + 540) % 360 - 180;
+    this.animation = { start: performance.now(), startTheta, turn, startPhi: degrees(from.phi), phi, startRadius: from.radius, radius, startTarget: this.controls.target.clone(), target };
+  }
+  animate() {
+    const m = this.animation, t = Math.min((performance.now() - m.start) / 450, 1), e = t * t * (3 - 2 * t);
+    this.place(m.startTheta + m.turn * e, m.startPhi + (m.phi - m.startPhi) * e, m.startRadius + (m.radius - m.startRadius) * e, m.startTarget.clone().lerp(m.target, e));
+    if (t === 1) this.animation = null;
+  }
+  copyCameraFrom(other) {
+    this.animation = null;
+    this.camera.position.copy(other.camera.position);
+    this.controls.target.copy(other.controls.target);
+    this.controls.update();
+  }
+  home(theta = 0, phi = DEFAULT_PHI) { return [theta, phi, this.frame.distance, this.frame.center.clone()]; }
+}
+
+let a = null, b = null, viewerError = false;
+const comparing = () => !$("paneB").hidden;
+const active = () => (comparing() && b ? [a, b] : [a]).filter(pane => pane?.frame);
+
+function startViewer() {
+  if (a || viewerError) return Boolean(a);
+  try {
+    a = new Pane($("hostA"), $("statusA"), $("capA"));
+    b = new Pane($("hostB"), $("statusB"), $("capB"));
+  } catch {
+    viewerError = true;
+    $("runError").hidden = false;
+    $("runError").textContent = "This browser could not start WebGL, which the 3D viewer needs.";
+    return false;
+  }
+  a.onFirstFrame = () => a.place(...a.home());
+  b.onFirstFrame = () => b.copyCameraFrom(a);
+  const link = (from, to) => { from.onChange = () => { if (performance.now() < from.activeUntil && comparing() && to.frame) to.copyCameraFrom(from); }; };
+  link(a, b);
+  link(b, a);
+  return true;
+}
+
+function currentRun() { return runs.find(run => run.name === selected); }
+
+let shownSignature = "", currentVersion = null;
+
+function showSelectedRun() {
+  const run = currentRun();
+  const hasModels = Boolean(run?.versions.length);
+  $("runEmpty").hidden = Boolean(run);
+  if (!run) $("runEmpty").textContent = "Nothing generated yet. Paste a sheet on the Generate model tab.";
+  $("runError").hidden = !run?.error;
+  $("runError").textContent = run?.error ? `This run failed: ${run.error}` : "";
+  $("viewer").hidden = !hasModels;
+  $("source").hidden = !run?.views.length;
+  $("details").hidden = !run;
+  if (!run) { shownSignature = ""; return; }
+  renderSource(run);
+  renderDetails(run);
+  if (!hasModels || !startViewer()) { shownSignature = ""; return; }
+  const signature = JSON.stringify([run.name, run.versions.map(v => [v.file, v.bytes])]);
+  if (signature === shownSignature) return;
+  shownSignature = signature;
+  $("versions").querySelectorAll("button").forEach(button => button.remove());
+  for (const version of run.versions) {
+    const button = el("button", { type: "button", textContent: version.label });
+    button.dataset.file = version.file;
+    button.addEventListener("click", () => pickVersion(version));
+    $("versions").append(button);
+  }
+  $("compare").replaceChildren(el("option", { value: "", textContent: "Nothing" }), ...run.versions.map(version => el("option", { value: version.file, textContent: version.label })));
+  closeCompare();
+  pickVersion(run.versions[0]);
+}
+
+async function pickVersion(version) {
+  currentVersion = version;
+  $("versions").querySelectorAll("button").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.file === version.file)));
+  $("size").textContent = formatBytes(version.bytes);
+  $("path").textContent = version.path;
+  $("faces").textContent = "–";
+  $("texture").textContent = "–";
+  const model = await a.show(version);
+  if (!model || currentVersion !== version) return;
+  $("faces").textContent = (model.geometry.index.count / 3).toLocaleString("en-US");
+  const image = model.material.map?.image;
+  $("texture").textContent = image ? `${image.width} px PBR` : "None";
+}
+
+function closeCompare() {
+  $("paneB").hidden = true;
+  $("stage").classList.remove("compare");
+}
+
+$("compare").addEventListener("change", e => {
+  const version = currentRun()?.versions.find(item => item.file === e.target.value);
+  if (!version) return closeCompare();
+  $("paneB").hidden = false;
+  $("stage").classList.add("compare");
+  b.show(version);
+});
+
+function renderSource(run) {
+  $("views").replaceChildren(...run.views.map(view => {
+    const name = el("b", { textContent: view.mirrored ? `${view.name}, mirrored` : view.name });
+    const button = el("button", { type: "button", className: "view" }, el("img", { src: view.url, alt: `The ${view.name} view` }),
+      el("span", {}, name, view.score == null ? "" : view.score.toFixed(3)));
+    button.dataset.theta = { front: 0, left: 90, back: 180, right: 270 }[view.name];
+    return button;
+  }));
+  $("sheet").hidden = !run.sheet;
+  if (run.sheet && !$("sheet").src.endsWith(run.sheet)) $("sheet").src = run.sheet;
+}
+
+function renderDetails(run) {
+  const row = (name, value) => el("tr", {}, el("th", { textContent: name }), el("td", { textContent: value }));
+  const rows = [row("Status", run.status === "running" ? STAGE_NAMES[run.stage] : run.status), row("Created", new Date(run.created * 1000).toLocaleString())];
+  if (run.seconds.shape) rows.push(row("Shape", `${Math.round(run.seconds.shape)} s`));
+  if (run.seconds.paint) rows.push(row("Paint and bake", `${Math.round(run.seconds.paint)} s`));
+  for (const [style, name] of Object.entries(STYLE_NAMES)) {
+    if (run.seconds[`paint_${style}`]) rows.push(row(`${name} paint`, `${Math.round(run.seconds[`paint_${style}`])} s`));
+  }
+  rows.push(row("Views used", run.views.map(view => view.name).join(", ") || "–"));
+  $("detailTable").replaceChildren(...rows);
+}
+
+function focusOn(name) {
+  if (name === "reset") return turn(0);
+  const f = FOCUS[name];
+  active().forEach(pane => {
+    const { center, size, distance } = pane.frame;
+    pane.moveTo(f.theta, 85, distance * f.zoom, new THREE.Vector3(center.x + f.x * size.x, center.y + (.5 - f.y) * size.y, center.z));
+  });
+}
+function turn(theta, phi) {
+  active().forEach(pane => pane.moveTo(...pane.home(Number(theta), phi === undefined ? DEFAULT_PHI : Number(phi))));
+}
+
+document.addEventListener("click", e => {
+  const target = e.target.closest("[data-theta],[data-focus]");
+  if (!target) return;
+  if (target.dataset.focus) focusOn(target.dataset.focus);
+  else turn(target.dataset.theta, target.dataset.phi);
+  if (target.closest(".sheet")) $("stage").scrollIntoView({ behavior: calm ? "auto" : "smooth", block: "center" });
+});
+$("runSelect").addEventListener("change", e => { selected = e.target.value; showSelectedRun(); });
+$("spin").addEventListener("click", e => {
+  const on = e.currentTarget.getAttribute("aria-pressed") !== "true";
+  e.currentTarget.setAttribute("aria-pressed", String(on));
+  if (a) a.controls.autoRotate = b.controls.autoRotate = on;
+});
+$("copy").addEventListener("click", async e => {
+  const button = e.currentTarget, text = $("path").textContent;
+  try {
+    await navigator.clipboard.writeText(text);
+    button.textContent = "Copied";
+  } catch {  // the browser only offers the clipboard API on https or localhost
+    getSelection().selectAllChildren($("path"));
+    button.textContent = "Press Ctrl+C";
+  }
+  setTimeout(() => { button.textContent = "Copy path"; }, 1600);
+});
+
+route();
+refreshRuns();
+</script>
+</body>
+</html>
